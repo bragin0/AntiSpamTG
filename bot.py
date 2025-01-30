@@ -8,22 +8,25 @@ from datetime import datetime, timedelta
 import sqlite3
 import aiofiles
 
-# Токен вашего бота
-API_TOKEN = '7488318384:AAGqDQF_kD5p8VwhrNycf8J3If5-ps4cCO4'
 
-# Путь к файлу конфигурации
+API_TOKEN = 'TOKEN'
+
+
+ADMIN_ID = 
+
+
 CHAT_ID_FILE = 'config.txt'
 
-# Включаем логирование
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Создание экземпляров бота и диспетчера
+
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 dp.middleware.setup(LoggingMiddleware())
 
-# Функция для загрузки CHAT_ID из файла
+
 def load_chat_ids():
     try:
         with open(CHAT_ID_FILE, 'r') as f:
@@ -35,7 +38,7 @@ def load_chat_ids():
         logger.error(f"Ошибка при загрузке CHAT_IDs: {e}")
         return []
 
-# Функция для записи CHAT_ID в файл
+
 async def save_chat_id(chat_id):
     try:
         async with aiofiles.open(CHAT_ID_FILE, 'a') as f:
@@ -44,32 +47,27 @@ async def save_chat_id(chat_id):
     except Exception as e:
         logger.error(f"Ошибка при сохранении CHAT_ID: {e}")
 
-# Функция для записи списка chat_id в файл
+
 async def save_chat_ids(chat_ids):
     try:
-        async with aiofiles.open(CHAT_ID_FILE, 'w') as f:  # Используем асинхронный метод
+        async with aiofiles.open(CHAT_ID_FILE, 'w') as f: 
             for chat_id in chat_ids:
                 await f.write(f"{chat_id}\n")
         logger.info("CHAT_IDs успешно сохранены.")
     except Exception as e:
         logger.error(f"Ошибка при сохранении CHAT_IDs: {e}")
 
-# Функция для удаления chat_id из файла
+
 async def delete_chat_id(chat_id):
-    # Получаем список chat_id
     global CHAT_IDS
     chat_ids = load_chat_ids()
 
-    # Убираем chat_id из списка
     if chat_id in chat_ids:
         chat_ids.remove(chat_id)
-        # Сохраняем измененный список в файл
         await save_chat_ids(chat_ids)
 
-        # Удаляем chat_id из базы данных
         delete_chat_id_from_db(chat_id)
 
-# Функция для удаления chat_id из базы данных
 def delete_chat_id_from_db(chat_id):
     try:
         conn = sqlite3.connect('messages.db')
@@ -81,11 +79,9 @@ def delete_chat_id_from_db(chat_id):
     except Exception as e:
         logger.error(f"Ошибка при удалении CHAT_ID {chat_id} из базы данных: {e}")
 
-# Обработчик нажатий на инлайн кнопки для удаления каналов
 @dp.callback_query_handler(lambda c: c.data == 'delete_chat_id')
 async def delete_chat(callback_query: types.CallbackQuery):
     if callback_query.from_user.id == ADMIN_ID:
-        # Загружаем список каналов
         global CHAT_IDS
         chat_ids = load_chat_ids()
         
@@ -93,8 +89,8 @@ async def delete_chat(callback_query: types.CallbackQuery):
             keyboard = InlineKeyboardMarkup(row_width=1)
             for chat_id in chat_ids:
                 try:
-                    chat = await bot.get_chat(chat_id)  # Получаем данные о чате
-                    chat_name = chat.username if chat.username else chat.title  # Получаем имя канала или группы
+                    chat = await bot.get_chat(chat_id) 
+                    chat_name = chat.username if chat.username else chat.title  
                     
                     button = InlineKeyboardButton(f"Удалить канал {chat_name}", callback_data=f'delete_{chat_id}')
                     keyboard.add(button)
@@ -110,61 +106,46 @@ async def delete_chat(callback_query: types.CallbackQuery):
     
     await bot.answer_callback_query(callback_query.id)
 
-# Обработчик нажатия на кнопку для удаления выбранного канала
 @dp.callback_query_handler(lambda c: c.data.startswith('delete_'))
 async def delete_chat(callback_query: types.CallbackQuery):
     if callback_query.from_user.id == ADMIN_ID:
-        chat_id = callback_query.data.split('_')[1]  # Извлекаем chat_id из callback_data
+        chat_id = callback_query.data.split('_')[1] 
         
-        # Удаляем chat_id из списка
         await delete_chat_id(chat_id)
 
-        # Обновляем список каналов после удаления
         global CHAT_IDS
-        CHAT_IDS = load_chat_ids()  # Заново загружаем актуализированный список каналов
+        CHAT_IDS = load_chat_ids() 
         
-        # Отправляем пользователю сообщение об успешном удалении
         await bot.send_message(callback_query.from_user.id, f"Канал с ID {chat_id} был успешно удален.")
 
-        # Оповещаем об обновленном списке каналов
         await bot.answer_callback_query(callback_query.id)
     else:
         await bot.send_message(callback_query.from_user.id, "У вас нет прав для удаления канала.")
 
-# Получаем список каналов из файла
 CHAT_IDS = load_chat_ids()
 
-# Если нет каналов, сообщаем об ошибке
 if not CHAT_IDS:
     logger.error("Нет сохранённых CHAT_ID в файле!")
 
-# Получаем ID админа (замените на свой ID)
-ADMIN_ID = 511301057  # Укажите ваш ID
-
-# Обработчик команды /start
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     chat_id = message.chat.id
     keyboard = InlineKeyboardMarkup(row_width=1)
     
-    # Кнопки для изменения или получения CHAT_ID
     set_chat_button = InlineKeyboardButton("Добавить новый канал по @username", callback_data='set_chat_id')
     delete_chat_button = InlineKeyboardButton("Удалить канал", callback_data='delete_chat_id')
 
     keyboard.add(set_chat_button, delete_chat_button)
     
-    # Отправляем сообщение с инлайн-кнопками
     await message.answer(f"Привет, вы админ!", reply_markup=keyboard)
 
-# Обработчик нажатий на инлайн кнопки
 @dp.callback_query_handler(lambda c: c.data == 'set_chat_id')
 async def set_chat_id(callback_query: types.CallbackQuery):
-    # Обновляем текст текущего сообщения
     await bot.edit_message_text(
         text="Пожалуйста, отправьте @username группы.",
         chat_id=callback_query.message.chat.id,
         message_id=callback_query.message.message_id,
-        reply_markup=None  # Убираем клавиатуру
+        reply_markup=None  
     )
     await bot.answer_callback_query(callback_query.id)
 
@@ -174,15 +155,13 @@ async def set_chat_id_by_username(message: types.Message):
         try:
             group_username = message.text.strip()
 
-            # Получаем информацию о чате по username
             chat = await bot.get_chat(group_username)
             new_chat_id = chat.id
 
-            await save_chat_id(new_chat_id)  # Сохраняем новый CHAT_ID в файл
+            await save_chat_id(new_chat_id)
             global CHAT_IDS
-            CHAT_IDS = load_chat_ids()  # Обновляем список каналов
+            CHAT_IDS = load_chat_ids() 
 
-            # Инлайн-клавиатура с кнопкой возврата
             keyboard = InlineKeyboardMarkup(row_width=1)
             back_button = InlineKeyboardButton("Вернуться в меню", callback_data='back_to_menu')
             keyboard.add(back_button)
@@ -197,18 +176,15 @@ async def set_chat_id_by_username(message: types.Message):
         await message.answer("У вас нет прав для изменения CHAT_ID.")
 
 
-# Обработчик возврата в главное меню
 @dp.callback_query_handler(lambda c: c.data == 'back_to_menu')
 async def back_to_menu(callback_query: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(row_width=1)
 
-    # Кнопки для изменения или получения CHAT_ID
     set_chat_button = InlineKeyboardButton("Добавить новый канал по @username", callback_data='set_chat_id')
     delete_chat_button = InlineKeyboardButton("Удалить канал", callback_data='delete_chat_id')
 
     keyboard.add(set_chat_button, delete_chat_button)
 
-    # Редактируем сообщение с кнопками
     await bot.edit_message_text(
         chat_id=callback_query.message.chat.id,
         message_id=callback_query.message.message_id,
@@ -216,11 +192,9 @@ async def back_to_menu(callback_query: types.CallbackQuery):
         reply_markup=keyboard
     )
 
-# Подключение к базе данных SQLite
-conn = sqlite3.connect('messages.db')  # Название файла базы данных
+conn = sqlite3.connect('messages.db') 
 cursor = conn.cursor()
 
-# Создание таблицы, если она не существует
 cursor.execute(''' 
 CREATE TABLE IF NOT EXISTS messages (
     user_id INTEGER,
@@ -230,16 +204,15 @@ CREATE TABLE IF NOT EXISTS messages (
 ''')
 conn.commit()
 
-# Функция для проверки сообщения и его удаления, если нарушен часовой интервал
 async def check_message(message: types.Message):
-    if not CHAT_IDS or message.chat.id not in map(int, CHAT_IDS):  # Проверка, что chat_id в списке
-        return  # Игнорируем сообщения из других чатов, если они не в списке CHAT_IDS
+    if not CHAT_IDS or message.chat.id not in map(int, CHAT_IDS):  
+        return 
 
     user_id = message.from_user.id
     username = message.from_user.username
     current_time = datetime.now()
 
-    # Проверяем последнее сообщение
+
     cursor.execute('SELECT timestamp FROM messages WHERE user_id = ? AND chat_id = ?', (user_id, message.chat.id))
     last_message = cursor.fetchone()
 
@@ -248,14 +221,11 @@ async def check_message(message: types.Message):
         time_diff = current_time - last_message_time
 
         if time_diff < timedelta(hours=1):
-            # Если у пользователя нет @username
             if not username:
                 await bot.send_message(message.chat.id, f"Пользователь [{user_id}]\nВы можете отправить следующее сообщение только через час!")
             else:
-                # Формируем сообщение с упоминанием пользователя и его ID
                 await bot.send_message(message.chat.id, f"@{username} [{user_id}]\nВы можете отправить следующее сообщение только через час!")
 
-            # Удаляем сообщение, так как оно нарушает правило
             await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
             logger.info(f"Сообщение {message.message_id} удалено в чате {message.chat.id}.")
         else:
@@ -267,15 +237,12 @@ async def check_message(message: types.Message):
                        (user_id, current_time.strftime('%Y-%m-%d %H:%M:%S'), message.chat.id))
         conn.commit()
 
-# Обработчик для новых сообщений
 @dp.message_handler(content_types=types.ContentType.TEXT)
 async def handle_message(message: types.Message):
     await check_message(message)
 
-# Запуск бота с обработкой ошибок
 if __name__ == "__main__":
     try:
-        # Для Windows нужно явно указать использование SelectorEventLoop
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         executor.start_polling(dp, skip_updates=True)
     except Exception as e:
